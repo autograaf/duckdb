@@ -1,0 +1,36 @@
+name: arm64 httpfs smoke
+on:
+  push:
+    branches: [arm64-httpfs-smoke]
+jobs:
+  smoke:
+    runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - duckdb: v1.5.6
+            asset: duckdb_cli-windows-arm64.zip
+            iterations: 25
+          - duckdb: v2.0.0
+            asset: duckdb-cli-windows-arm64.tar.gz
+            iterations: 25
+    steps:
+      - name: Fetch DuckDB CLI
+        shell: pwsh
+        run: |
+          curl.exe -sSLO https://github.com/duckdb/duckdb/releases/download/${{ matrix.duckdb }}/${{ matrix.asset }}
+          if ("${{ matrix.asset }}".EndsWith(".zip")) { Expand-Archive ${{ matrix.asset }} -DestinationPath . } else { tar -xzf ${{ matrix.asset }} }
+          .\duckdb.exe --version
+      - name: Exercise httpfs over TLS
+        shell: pwsh
+        run: |
+          .\duckdb.exe -c "INSTALL httpfs;"
+          if ($LASTEXITCODE -ne 0) { Write-Host "FAILED install exit $LASTEXITCODE"; exit 1 }
+          for ($i = 0; $i -lt ${{ matrix.iterations }}; $i++) {
+            .\duckdb.exe -c "LOAD httpfs; SELECT count(*) FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/data/csv/real/lineitem_sample.csv');"
+            if ($LASTEXITCODE -ne 0) { Write-Host "FAILED iteration $i exit $LASTEXITCODE"; exit 1 }
+            .\duckdb.exe -c "LOAD httpfs; ATTACH 'https://blobs.duckdb.org/databases/stations.duckdb' AS s (READ_ONLY); SELECT count(*) FROM s.stations;"
+            if ($LASTEXITCODE -ne 0) { Write-Host "FAILED iteration $i exit $LASTEXITCODE"; exit 1 }
+          }
+          Write-Host "${{ matrix.iterations }} iterations clean"
