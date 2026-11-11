@@ -49,7 +49,6 @@ env:
   # For example, to build and deploy extensions, use:
   # OVERRIDE_JOBS: linux-relassert linux-release linux-release-musl windows extensions-build extensions-deploy
   # Add "osx" when running the full extension matrix.
-  OVERRIDE_JOBS: windows
 
 jobs:
  prepare:
@@ -192,6 +191,7 @@ jobs:
         env:
           CHANGED_KEYS: ${{ steps.changed.outputs.changed_keys }}
           INPUT_EXCLUDE_ARCHS: ${{ github.event_name == 'workflow_dispatch' && inputs.extension_exclude_archs || '' }}
+          OVERRIDE_JOBS: windows
         run: |
           skip_tests="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.skip_tests || 'false' }}"
           python3 scripts/ci/job_stages.py \
