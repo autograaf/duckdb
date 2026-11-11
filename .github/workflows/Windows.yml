@@ -34,8 +34,8 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
-      CC: clang-cl
-      CXX: clang-cl
+      CC: cl
+      CXX: cl
     steps:
     - name: "Checkout"
       uses: duckdb/duckdb-ci/.github/actions/checkout@main
@@ -55,20 +55,8 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        clang-cl --version
         python scripts/ci/retry.py -- python scripts/windows_ci.py
         python scripts/ci/retry.py -- make windows_release
-
-    - name: Verify architecture flags
-      shell: pwsh
-      run: |
-        $commands = Get-Content compile_commands.json -Raw
-        if (!$commands.Contains('clang-cl')) {
-          throw 'Windows amd64 Release compile commands are not using clang-cl'
-        }
-        if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
-          throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
-        }
 
     - name: Set DUCKDB_INSTALL_LIB for ADBC tests
       shell: pwsh
