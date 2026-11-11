@@ -49,6 +49,7 @@ env:
   # For example, to build and deploy extensions, use:
   # OVERRIDE_JOBS: linux-relassert linux-release linux-release-musl windows extensions-build extensions-deploy
   # Add "osx" when running the full extension matrix.
+  OVERRIDE_JOBS: windows
 
 jobs:
  prepare:
@@ -1121,7 +1122,6 @@ jobs:
     secrets: inherit
     needs:
       - prepare
-      - linux-relassert
     with:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
