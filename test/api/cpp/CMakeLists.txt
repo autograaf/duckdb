@@ -34,6 +34,11 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp)
 # The tests also call the V2 C API directly, the unstable functions included.
 target_compile_definitions(test_cpp_api PRIVATE DUCKDB_V2_API_ALLOW_UNSTABLE=1)
+if(MSVC)
+  # Permissive cl converts a string literal to void *, selecting the private
+  # handle constructors.
+  target_compile_options(test_cpp_api PRIVATE /Zc:strictStrings)
+endif()
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_cpp_api>
