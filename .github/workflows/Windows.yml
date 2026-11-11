@@ -172,9 +172,8 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
     env:
       GEN: ninja
-      CC: clang-cl
-      CXX: clang-cl
-      EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=i686-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=i686-pc-windows-msvc
+      CC: cl
+      CXX: cl
 
     steps:
     - name: "Checkout"
@@ -198,16 +197,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        clang-cl --version
         python scripts/ci/retry.py -- make windows_release_32
-
-    - name: Verify compiler
-      shell: pwsh
-      run: |
-        $commands = Get-Content compile_commands.json -Raw
-        if (!$commands.Contains('clang-cl')) {
-          throw 'Windows 32-bit compile commands are not using clang-cl'
-        }
 
     - name: Test
       shell: bash
@@ -229,9 +219,8 @@ jobs:
    runs-on: windows-2025-vs2026
    env:
      GEN: ninja
-     CC: clang-cl
-     CXX: clang-cl
-     EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
+     CC: cl
+     CXX: cl
 
    steps:
      - uses: actions/checkout@v6
@@ -253,19 +242,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         clang-cl --version
          python scripts/ci/retry.py -- make DUCKDB_PLATFORM=windows_arm64 windows_release
-
-     - name: Verify architecture flags
-       shell: pwsh
-       run: |
-         $commands = Get-Content compile_commands.json -Raw
-         if (!$commands.Contains('clang-cl')) {
-           throw 'Windows ARM64 Release compile commands are not using clang-cl'
-         }
-         if (!$commands.Contains('-march=armv8-a') -or !$commands.Contains('-mtune=generic')) {
-           throw 'Windows ARM64 Release compile commands are missing the architecture flags'
-         }
 
      - name: Sign files with Azure Trusted Signing (TM)
        if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
