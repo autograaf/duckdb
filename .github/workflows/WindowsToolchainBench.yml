@@ -4,6 +4,14 @@ on:
     branches:
       - windows-toolchain-bench
   workflow_dispatch:
+    inputs:
+      rebuild:
+        type: boolean
+        default: true
+
+env:
+  # Builds reused when the build jobs are skipped.
+  BUILD_RUN_ID: 43208153214
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,6 +20,7 @@ concurrency:
 jobs:
   build:
     name: Build (${{ matrix.config }})
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.rebuild }}
     runs-on: windows-2022
     timeout-minutes: 240
     strategy:
@@ -71,6 +80,10 @@ jobs:
   bench:
     name: TPC-H SF1
     needs: build
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    permissions:
+      actions: read
+      contents: read
     runs-on: windows-2022
     timeout-minutes: 120
     steps:
@@ -84,8 +97,10 @@ jobs:
 
       - uses: actions/download-artifact@v7
         with:
-          pattern: toolchain-bench-*
+          pattern: toolchain-bench-[abc]
           path: builds
+          run-id: ${{ needs.build.result == 'skipped' && env.BUILD_RUN_ID || github.run_id }}
+          github-token: ${{ github.token }}
 
       - name: Runner CPU
         shell: pwsh

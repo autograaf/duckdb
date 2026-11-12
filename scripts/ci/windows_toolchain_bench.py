@@ -19,14 +19,16 @@ def run_cli(exe, database, sql, log_path, readonly=False):
     if readonly:
         args.append('-readonly')
     args.append(database)
-    proc = subprocess.run(args, input=sql, capture_output=True, text=True, timeout=3600)
+    proc = subprocess.run(args, input=sql.encode(), capture_output=True, timeout=3600)
+    stdout = proc.stdout.decode('utf-8', errors='replace')
+    stderr = proc.stderr.decode('utf-8', errors='replace')
     with open(log_path, 'a', encoding='utf-8') as log:
-        log.write(proc.stdout)
-        log.write(proc.stderr)
+        log.write(stdout)
+        log.write(stderr)
     if proc.returncode != 0:
-        sys.stderr.write(proc.stdout[-4000:] + proc.stderr[-4000:])
+        sys.stderr.write(stdout[-4000:] + stderr[-4000:])
         raise RuntimeError(f'{exe} exited with {proc.returncode}')
-    return proc.stdout
+    return stdout
 
 
 def session_sql(extension, marks_csv):
@@ -67,6 +69,7 @@ def main():
     parser.add_argument('--out', required=True)
     parser.add_argument('--rounds', type=int, default=5)
     args = parser.parse_args()
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     os.makedirs(args.out, exist_ok=True)
 
     builds = {}
