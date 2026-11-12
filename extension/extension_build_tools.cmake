@@ -343,6 +343,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         if (WIN32)
             if (MSVC)
                 duckdb_link_export_free_archive(${TARGET_NAME} duckdb_static)
+                # DuckDB is linked in, and lld-link does not keep a function alive through a dllimport reference
+                target_compile_definitions(${TARGET_NAME} PRIVATE DUCKDB_API= DUCKDB_C_API=)
                 # link.exe/lld-link only default these on without /DEBUG; pin the --gc-sections equivalent
                 target_link_options(${TARGET_NAME} PRIVATE "$<$<CONFIG:Release>:/OPT:REF;/OPT:ICF>")
             else()
