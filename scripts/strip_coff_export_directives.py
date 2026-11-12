@@ -7,6 +7,8 @@ AR_MAGIC = b'!<arch>\n'
 AR_HEADER_SIZE = 60
 SECTION_HEADER_SIZE = 40
 BIGOBJ_HEADER_SIZE = 56
+# /GL objects share the anonymous header but not this class id
+BIGOBJ_CLASS_ID = bytes.fromhex('c7a1bad1eebaa94baf20faf66aa4dcb8')
 # IMAGE_FILE_MACHINE_ I386, AMD64, ARM64, ARM64EC, ARM64X
 COFF_MACHINES = (0x14C, 0x8664, 0xAA64, 0xA641, 0xA64E)
 EXPORT_DIRECTIVE = re.compile(rb'"[/-]export:[^"]*"|(?<!\S)[/-]export:(?:"[^"]*"|[^\s"])+', re.IGNORECASE)
@@ -19,9 +21,10 @@ def section_table(data, start):
         optional_header_size = struct.unpack_from('<H', data, start + 16)[0]
         return start + 20 + optional_header_size, count
     version, machine = struct.unpack_from('<HH', data, start + 4)
-    if sig1 == 0 and sig2 == 0xFFFF and version >= 2 and machine in COFF_MACHINES:
+    is_bigobj = data[start + 12 : start + 28] == BIGOBJ_CLASS_ID
+    if sig1 == 0 and sig2 == 0xFFFF and version >= 2 and machine in COFF_MACHINES and is_bigobj:
         return start + BIGOBJ_HEADER_SIZE, struct.unpack_from('<I', data, start + 44)[0]
-    if sig1 == 0 and sig2 == 0xFFFF:
+    if sig1 == 0 and sig2 == 0xFFFF and version < 2:
         # an import object, which has no sections
         return start, 0
     return None, 0
