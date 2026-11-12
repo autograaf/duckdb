@@ -66,7 +66,7 @@ jobs:
         if (!$commands.Contains('clang-cl')) {
           throw 'Windows amd64 Release compile commands are not using clang-cl'
         }
-        if (!$commands.Contains('-march=haswell') -or !$commands.Contains('-mtune=generic')) {
+        if (!$commands.Contains('-march=x86-64-v2') -or !$commands.Contains('-mtune=generic')) {
           throw 'Windows amd64 Release compile commands are missing the CLI architecture flags'
         }
 

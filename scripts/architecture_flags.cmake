@@ -42,7 +42,7 @@ function(duckdb_resolve_architecture_flags OUT_VARIABLE)
 
     if(DUCKDB_TARGET_ARCHITECTURE STREQUAL "amd64")
       if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-        set(DUCKDB_ARCHITECTURE_FLAGS "-march=haswell;-mtune=generic")
+        set(DUCKDB_ARCHITECTURE_FLAGS "-march=x86-64-v2;-mtune=generic")
       elseif(DUCKDB_RESOLVED_OPTIMIZATION_PROFILE STREQUAL "EXTENSION")
         set(DUCKDB_ARCHITECTURE_FLAGS "-march=x86-64-v2;-mtune=generic")
       else()
