@@ -49,6 +49,7 @@ env:
   # For example, to build and deploy extensions, use:
   # OVERRIDE_JOBS: linux-relassert linux-release linux-release-musl windows extensions-build extensions-deploy
   # Add "osx" when running the full extension matrix.
+  OVERRIDE_JOBS: linux-relassert windows
 
 jobs:
  prepare:
