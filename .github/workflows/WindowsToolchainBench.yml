@@ -1,0 +1,112 @@
+name: Windows Toolchain Bench
+on:
+  push:
+    branches:
+      - windows-toolchain-bench
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.config }})
+    runs-on: windows-2022
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - config: a
+            ref: 4c4d4d90425d84a8d48de18c3a7ac4f2990ba566
+            compiler: clang-cl
+          - config: b
+            ref: 691a5e3b88585bd923ee5471424cc62e95d10d33
+            compiler: clang-cl
+          - config: c
+            ref: 6b2f0ac8d11b02838c4d3b6d7eaef86edd5f64b4
+            compiler: cl
+    env:
+      GEN: ninja
+      CC: ${{ matrix.compiler }}
+      CXX: ${{ matrix.compiler }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: ./.github/actions/ccache-action
+        with:
+          key: toolchain-bench-${{ matrix.config }}
+
+      - uses: ./.github/actions/setup-msvc-env
+
+      - name: Build
+        shell: bash
+        run: |
+          python scripts/ci/retry.py -- python scripts/windows_ci.py
+          python scripts/ci/retry.py -- make windows_release
+
+      - name: Record toolchain
+        shell: bash
+        run: |
+          if [ "$CC" = "cl" ]; then cl 2>&1 | head -n 1; else clang-cl --version; fi
+          grep -o -- '-march=[a-z0-9-]*' compile_commands.json | sort | uniq -c || echo "no -march flags"
+          ./duckdb.exe -c "PRAGMA platform; PRAGMA version;"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: toolchain-bench-${{ matrix.config }}
+          path: |
+            duckdb.exe
+            repository
+          if-no-files-found: error
+
+  bench:
+    name: TPC-H SF1
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts/ci
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: toolchain-bench-*
+          path: builds
+
+      - name: Runner CPU
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force results | Out-Null
+          & {
+            Get-CimInstance Win32_Processor | Format-List Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed
+            Get-CimInstance Win32_ComputerSystem | Format-List Model, TotalPhysicalMemory
+            "AVX2:    $([System.Runtime.Intrinsics.X86.Avx2]::IsSupported)"
+            "BMI2:    $([System.Runtime.Intrinsics.X86.Bmi2]::IsSupported)"
+            "FMA:     $([System.Runtime.Intrinsics.X86.Fma]::IsSupported)"
+            "AVX512F: $([System.Runtime.Intrinsics.X86.Avx512F]::IsSupported)"
+            "SSE4.2:  $([System.Runtime.Intrinsics.X86.Sse42]::IsSupported)"
+          } | Tee-Object results/cpu.txt
+
+      - name: Run TPC-H
+        shell: bash
+        run: python scripts/ci/windows_toolchain_bench.py --builds builds --out results --rounds 5
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: toolchain-bench-results
+          path: results
