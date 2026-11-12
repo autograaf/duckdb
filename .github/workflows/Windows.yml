@@ -78,6 +78,14 @@ jobs:
       shell: bash
       run: echo "$DUCKDB_INSTALL_LIB"
 
+    - uses: actions/upload-artifact@v7
+      with:
+        name: pre-test-extensions-windows-amd64
+        path: |
+          repository
+          test/extension/*.duckdb_extension
+        if-no-files-found: error
+
     - name: Test
       shell: bash
       if: ${{ !inputs.skip_tests }}
