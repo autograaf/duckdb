@@ -24,7 +24,7 @@ def section_table(data, start):
     is_bigobj = data[start + 12 : start + 28] == BIGOBJ_CLASS_ID
     if sig1 == 0 and sig2 == 0xFFFF and version >= 2 and machine in COFF_MACHINES and is_bigobj:
         return start + BIGOBJ_HEADER_SIZE, struct.unpack_from('<I', data, start + 44)[0]
-    if sig1 == 0 and sig2 == 0xFFFF and version < 2:
+    if sig1 == 0 and sig2 == 0xFFFF and version == 0:
         # an import object, which has no sections
         return start, 0
     return None, 0
