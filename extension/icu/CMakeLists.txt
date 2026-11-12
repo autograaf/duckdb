@@ -46,7 +46,7 @@ set(ICU_EXTENSION_FILES
 build_extension_library(icu NO_WARNINGS ${ICU_EXTENSION_FILES})
 link_threads(icu_extension "")
 target_link_libraries(icu_extension duckdb_zstd)
-target_link_libraries(icu_loadable_extension duckdb_zstd)
+duckdb_link_loadable_bundled_libraries(icu duckdb_zstd)
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

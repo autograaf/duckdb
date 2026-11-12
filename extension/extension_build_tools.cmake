@@ -256,6 +256,42 @@ function(capi_entrypoint_symbol NAME ABI_TYPE CAPI_VERSION OUT_VAR)
     endif()
 endfunction()
 
+# MSVC has no --exclude-libs: dllexport is a directive inside each object, so TARGET links a copy of ARCHIVE without them.
+function(duckdb_link_export_free_archive TARGET ARCHIVE)
+    # a prebuilt archive passes its wrapper target, which carries the libraries the extension asked for
+    set(DEPENDENCY_SOURCE ${ARCHIVE})
+    if(ARGN)
+        set(DEPENDENCY_SOURCE ${ARGN})
+    endif()
+    if(NOT Python3_EXECUTABLE OR CMAKE_VERSION VERSION_LESS 3.15)
+        message(WARNING "${TARGET} keeps the exports of ${ARCHIVE}: hiding them needs Python 3 and CMake 3.15")
+        target_link_libraries(${TARGET} ${DEPENDENCY_SOURCE})
+        return()
+    endif()
+    # CMAKE_CFG_INTDIR keeps one copy per configuration under multi-config generators
+    set(EXPORT_FREE_ARCHIVE "${DuckDB_BINARY_DIR}/export_free/${CMAKE_CFG_INTDIR}/${ARCHIVE}.lib")
+    set(STRIP_SCRIPT "${DUCKDB_MODULE_BASE_DIR}/scripts/strip_coff_export_directives.py")
+    if(NOT TARGET ${ARCHIVE}_export_free)
+        add_custom_command(
+            OUTPUT "${EXPORT_FREE_ARCHIVE}"
+            COMMAND ${Python3_EXECUTABLE} "${STRIP_SCRIPT}" "$<TARGET_FILE:${ARCHIVE}>" "${EXPORT_FREE_ARCHIVE}"
+            DEPENDS ${ARCHIVE} "$<TARGET_FILE:${ARCHIVE}>" "${STRIP_SCRIPT}"
+            VERBATIM)
+        add_custom_target(${ARCHIVE}_export_free DEPENDS "${EXPORT_FREE_ARCHIVE}")
+    endif()
+    add_dependencies(${TARGET} ${ARCHIVE}_export_free)
+    # an extension archive names duckdb_static as a dependency; the loadable already links its export-free copy
+    set(DEPENDENCIES "$<TARGET_GENEX_EVAL:${DEPENDENCY_SOURCE},$<TARGET_PROPERTY:${DEPENDENCY_SOURCE},INTERFACE_LINK_LIBRARIES>>")
+    target_link_libraries(${TARGET} "${EXPORT_FREE_ARCHIVE}" "$<FILTER:${DEPENDENCIES},EXCLUDE,^(duckdb_static|${ARCHIVE})$>")
+endfunction()
+
+# an MSVC loadable takes DuckDB's bundled libraries from its export-free copy of duckdb_static
+function(duckdb_link_loadable_bundled_libraries NAME)
+    if(NOT MSVC)
+        target_link_libraries(${NAME}_loadable_extension ${ARGN})
+    endif()
+endfunction()
+
 function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTENSION_VERSION CAPI_VERSION PARAMETERS)
     set(TARGET_NAME ${NAME}_loadable_extension)
     set(PREBUILT_EXTENSION FALSE)
@@ -305,11 +341,14 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
         # TODO strip all symbols except the capi init
     elseif (EXTENSION_STATIC_BUILD)
         if (WIN32)
-            target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
             if (MSVC)
+                duckdb_link_export_free_archive(${TARGET_NAME} duckdb_static)
                 # link.exe/lld-link only default these on without /DEBUG; pin the --gc-sections equivalent
                 target_link_options(${TARGET_NAME} PRIVATE "$<$<CONFIG:Release>:/OPT:REF;/OPT:ICF>")
+            else()
+                target_link_libraries(${TARGET_NAME} duckdb_static)
             endif()
+            target_link_libraries(${TARGET_NAME} ${DUCKDB_EXTRA_LINK_FLAGS})
         elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
             if (APPLE)
                 set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -561,15 +600,20 @@ function(build_extension_library NAME)
     set(DUCKDB_LOADABLE_FROM_ARCHIVE TRUE)
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
     build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${LOADABLE_SOURCE})
-    target_link_libraries(${NAME}_loadable_extension ${NAME}_extension)
     # the entrypoint lives in the archive, so the link has to ask for it
     set(ENTRY ${NAME}_duckdb_cpp_init)
     if(MSVC)
-        if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-            set(ENTRY "_${ENTRY}")
+        if(TARGET ${NAME}_prebuilt_extension)
+            duckdb_link_export_free_archive(${NAME}_loadable_extension ${NAME}_prebuilt_extension ${NAME}_extension)
+        else()
+            duckdb_link_export_free_archive(${NAME}_loadable_extension ${NAME}_extension)
         endif()
-        target_link_options(${NAME}_loadable_extension PRIVATE "/INCLUDE:${ENTRY}")
-    elseif(APPLE)
+        # the directive that exported the entrypoint is blanked with the rest, and /EXPORT also pulls it in
+        target_link_options(${NAME}_loadable_extension PRIVATE "/EXPORT:${ENTRY}")
+        return()
+    endif()
+    target_link_libraries(${NAME}_loadable_extension ${NAME}_extension)
+    if(APPLE)
         target_link_options(${NAME}_loadable_extension PRIVATE "-Wl,-u,_${ENTRY}")
     else()
         if(MINGW AND CMAKE_SIZEOF_VOID_P EQUAL 4)

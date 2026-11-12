@@ -89,7 +89,7 @@ if(NOT CLANG_TIDY)
 endif()
 
 build_extension_library(parquet ${PARQUET_EXTENSION_FILES})
-target_link_libraries(parquet_loadable_extension duckdb_mbedtls duckdb_zstd)
+duckdb_link_loadable_bundled_libraries(parquet duckdb_mbedtls duckdb_zstd)
 
 install(
   TARGETS parquet_extension
