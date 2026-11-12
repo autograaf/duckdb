@@ -14,11 +14,8 @@ def sql_path(path):
     return os.path.abspath(path).replace('\\', '/')
 
 
-def run_cli(exe, database, sql, log_path, readonly=False):
-    args = [exe, '-unsigned']
-    if readonly:
-        args.append('-readonly')
-    args.append(database)
+def run_cli(exe, database, sql, log_path):
+    args = [exe, '-unsigned', database]
     proc = subprocess.run(args, input=sql.encode(), capture_output=True, timeout=3600)
     stdout = proc.stdout.decode('utf-8', errors='replace')
     stderr = proc.stderr.decode('utf-8', errors='replace')
@@ -100,7 +97,7 @@ def main():
         for config in order:
             exe, extension, database, log_path = builds[config]
             marks_csv = sql_path(os.path.join(args.out, f'marks-{config}-{round_nr}.csv'))
-            run_cli(exe, database, session_sql(extension, marks_csv), log_path, readonly=True)
+            run_cli(exe, database, session_sql(extension, marks_csv), log_path)
             result = read_marks(marks_csv)
             for q in QUERIES:
                 times[config][q].append(result[q])
